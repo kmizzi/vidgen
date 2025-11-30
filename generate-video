@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Local wrapper for generate-video that tunnels to the remote server
+#
+# Usage:
+#   ./generate-video -p "your prompt" -o output_name
+#   ./generate-video -p "prompt" --frames 65 --queue
+#
+# All arguments are passed through to the remote generate-video command.
+#
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+# Load config
+if [[ -f "$ENV_FILE" ]]; then
+    source "$ENV_FILE"
+fi
+
+if [[ -z "$SERVER_IP" ]]; then
+    echo "Error: SERVER_IP not found in .env"
+    echo "Run ./deploy.sh first to provision a server"
+    exit 1
+fi
+
+# Pass all arguments through to remote server
+exec ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@$SERVER_IP" "generate-video $*"

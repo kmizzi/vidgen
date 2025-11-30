@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# Environment (contains server IP and droplet name)
+.env
+
+# Output files
+*.mp4
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
