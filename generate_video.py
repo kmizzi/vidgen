@@ -77,6 +77,10 @@ def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, f
 
     This workflow takes an input image and animates it based on the text prompt.
     CLIP Vision encoding ensures the subject's appearance is preserved in the video.
+
+    Flow:
+    LoadImage -> CLIPVisionEncode -> WanImageToVideo -> KSampler -> VAEDecode -> VideoCombine
+                 CLIPVisionLoader -^
     """
     return {
         "1": {
@@ -106,46 +110,46 @@ def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, f
                 "clip": ["1", 1]
             }
         },
-        "9": {
+        "5": {
             "class_type": "LoadImage",
             "inputs": {
                 "image": image_filename
             }
         },
-        "10": {
+        "6": {
             "class_type": "CLIPVisionLoader",
             "inputs": {
                 "clip_name": "sigclip_vision_patch14_384.safetensors"
             }
         },
-        "11": {
+        "7": {
             "class_type": "CLIPVisionEncode",
             "inputs": {
-                "clip_vision": ["10", 0],
-                "image": ["9", 0]
+                "clip_vision": ["6", 0],
+                "image": ["5", 0]
             }
         },
-        "5": {
+        "8": {
             "class_type": "WanImageToVideo",
             "inputs": {
                 "positive": ["3", 0],
                 "negative": ["4", 0],
                 "vae": ["1", 2],
-                "clip_vision_output": ["11", 0],
-                "start_image": ["9", 0],
+                "clip_vision_output": ["7", 0],
+                "start_image": ["5", 0],
                 "width": width,
                 "height": height,
                 "length": frames,
                 "batch_size": 1
             }
         },
-        "6": {
+        "9": {
             "class_type": "KSampler",
             "inputs": {
                 "model": ["2", 0],
-                "positive": ["5", 0],
-                "negative": ["5", 1],
-                "latent_image": ["5", 2],
+                "positive": ["8", 0],
+                "negative": ["8", 1],
+                "latent_image": ["8", 2],
                 "seed": seed,
                 "steps": steps,
                 "cfg": cfg,
@@ -154,17 +158,17 @@ def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, f
                 "denoise": 1.0
             }
         },
-        "7": {
+        "10": {
             "class_type": "VAEDecode",
             "inputs": {
-                "samples": ["6", 0],
+                "samples": ["9", 0],
                 "vae": ["1", 2]
             }
         },
-        "8": {
+        "11": {
             "class_type": "VHS_VideoCombine",
             "inputs": {
-                "images": ["7", 0],
+                "images": ["10", 0],
                 "frame_rate": 16,
                 "loop_count": 0,
                 "filename_prefix": filename_prefix,
