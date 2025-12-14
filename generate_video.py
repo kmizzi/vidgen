@@ -73,9 +73,10 @@ def upload_image(server, image_path):
 
 
 def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, frames, steps, cfg, seed, filename_prefix):
-    """Build I2V (Image-to-Video) workflow using WanImageToVideo with start_image.
+    """Build I2V (Image-to-Video) workflow using WanImageToVideo with CLIP Vision encoding.
 
     This workflow takes an input image and animates it based on the text prompt.
+    CLIP Vision encoding ensures the subject's appearance is preserved in the video.
     """
     return {
         "1": {
@@ -111,12 +112,26 @@ def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, f
                 "image": image_filename
             }
         },
+        "10": {
+            "class_type": "CLIPVisionLoader",
+            "inputs": {
+                "clip_name": "sigclip_vision_patch14_384.safetensors"
+            }
+        },
+        "11": {
+            "class_type": "CLIPVisionEncode",
+            "inputs": {
+                "clip_vision": ["10", 0],
+                "image": ["9", 0]
+            }
+        },
         "5": {
             "class_type": "WanImageToVideo",
             "inputs": {
                 "positive": ["3", 0],
                 "negative": ["4", 0],
                 "vae": ["1", 2],
+                "clip_vision_output": ["11", 0],
                 "start_image": ["9", 0],
                 "width": width,
                 "height": height,

@@ -1,6 +1,6 @@
 {
-  "last_node_id": 11,
-  "last_link_id": 16,
+  "last_node_id": 12,
+  "last_link_id": 18,
   "nodes": [
     {
       "id": 1,
@@ -62,17 +62,48 @@
     {
       "id": 9,
       "type": "LoadImage",
-      "pos": [450, 500],
+      "pos": [50, 400],
       "size": [300, 314],
       "flags": {},
       "order": 4,
       "mode": 0,
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [14], "slot_index": 0},
+        {"name": "IMAGE", "type": "IMAGE", "links": [14, 16], "slot_index": 0},
         {"name": "MASK", "type": "MASK", "links": null}
       ],
       "properties": {"Node name for S&R": "LoadImage"},
       "widgets_values": ["input_image.png", "image"]
+    },
+    {
+      "id": 10,
+      "type": "CLIPVisionLoader",
+      "pos": [50, 750],
+      "size": [300, 58],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "outputs": [
+        {"name": "CLIP_VISION", "type": "CLIP_VISION", "links": [15], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "CLIPVisionLoader"},
+      "widgets_values": ["sigclip_vision_patch14_384.safetensors"]
+    },
+    {
+      "id": 11,
+      "type": "CLIPVisionEncode",
+      "pos": [400, 600],
+      "size": [250, 80],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip_vision", "type": "CLIP_VISION", "link": 15},
+        {"name": "image", "type": "IMAGE", "link": 16}
+      ],
+      "outputs": [
+        {"name": "CLIP_VISION_OUTPUT", "type": "CLIP_VISION_OUTPUT", "links": [17], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "CLIPVisionEncode"}
     },
     {
       "id": 5,
@@ -80,14 +111,14 @@
       "pos": [850, 200],
       "size": [270, 210],
       "flags": {},
-      "order": 5,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {"name": "positive", "type": "CONDITIONING", "link": 7},
         {"name": "negative", "type": "CONDITIONING", "link": 8},
         {"name": "vae", "type": "VAE", "link": 9},
-        {"name": "clip_vision_output", "type": "CLIP_VISION_OUTPUT", "link": null, "shape": 7},
-        {"name": "start_image", "type": "IMAGE", "link": 14, "shape": 7}
+        {"name": "clip_vision_output", "type": "CLIP_VISION_OUTPUT", "link": 17},
+        {"name": "start_image", "type": "IMAGE", "link": 14}
       ],
       "outputs": [
         {"name": "positive", "type": "CONDITIONING", "links": [10], "slot_index": 0},
@@ -103,7 +134,7 @@
       "pos": [1180, 200],
       "size": [270, 262],
       "flags": {},
-      "order": 6,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {"name": "model", "type": "MODEL", "link": 4},
@@ -121,7 +152,7 @@
       "pos": [1500, 250],
       "size": [150, 46],
       "flags": {},
-      "order": 7,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {"name": "samples", "type": "LATENT", "link": 12},
@@ -136,7 +167,7 @@
       "pos": [1700, 100],
       "size": [350, 450],
       "flags": {},
-      "order": 8,
+      "order": 10,
       "mode": 0,
       "inputs": [{"name": "images", "type": "IMAGE", "link": 13}],
       "outputs": [{"name": "Filenames", "type": "VHS_FILENAMES", "links": null}],
@@ -173,7 +204,10 @@
     [11, 5, 1, 6, 2, "CONDITIONING"],
     [12, 6, 0, 7, 0, "LATENT"],
     [13, 7, 0, 8, 0, "IMAGE"],
-    [14, 9, 0, 5, 4, "IMAGE"]
+    [14, 9, 0, 5, 4, "IMAGE"],
+    [15, 10, 0, 11, 0, "CLIP_VISION"],
+    [16, 9, 0, 11, 1, "IMAGE"],
+    [17, 11, 0, 5, 3, "CLIP_VISION_OUTPUT"]
   ],
   "groups": [
     {
@@ -187,7 +221,7 @@
   "extra": {
     "info": {
       "name": "WAN 2.2 NSFW I2V Workflow",
-      "description": "Image-to-video using WanImageToVideo node with start_image input. Settings: CFG=1, Steps=8, Shift=8.",
+      "description": "Image-to-video with CLIP Vision encoding for proper subject preservation. Settings: CFG=1, Steps=8, Shift=8.",
       "author": "Based on Phr00t Rapid AIO"
     }
   },

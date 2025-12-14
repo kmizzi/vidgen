@@ -185,13 +185,21 @@ if [[ ! -d custom_nodes/ComfyUI-VideoHelperSuite ]]; then
     cd ../..
 fi
 
-echo "PROGRESS:5:8:Downloading model (~23GB, please wait)..."
+echo "PROGRESS:5:8:Downloading models (~23GB + 850MB, please wait)..."
 mkdir -p models/checkpoints
+mkdir -p models/clip_vision
 if [[ ! -f models/checkpoints/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors ]]; then
     wget -q -O models/checkpoints/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors \
         "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v12/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors"
 else
-    echo "Model already downloaded"
+    echo "Main model already downloaded"
+fi
+# Download CLIP Vision model for I2V
+if [[ ! -f models/clip_vision/sigclip_vision_patch14_384.safetensors ]]; then
+    wget -q -O models/clip_vision/sigclip_vision_patch14_384.safetensors \
+        "https://huggingface.co/Comfy-Org/sigclip_vision_384/resolve/main/sigclip_vision_patch14_384.safetensors"
+else
+    echo "CLIP Vision model already downloaded"
 fi
 
 echo "PROGRESS:6:8:Creating systemd service..."
