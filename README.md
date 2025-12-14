@@ -4,8 +4,9 @@ Generate uncensored AI videos using WAN 2.2 Rapid AIO on a DigitalOcean GPU Drop
 
 ## Features
 
+- **Text-to-Video (T2V)** - Generate videos from text prompts
+- **Image-to-Video (I2V)** - Animate images with text guidance
 - **Phr00t's Rapid AIO NSFW Model** - Fast, high-quality uncensored video generation
-- **~10 second generation** - 2-second video in ~10 seconds on H100
 - **CLI + Web UI** - Use `generate-video` command or ComfyUI interface
 - **One-shot deployment** - Single script sets up everything
 
@@ -38,34 +39,44 @@ This will:
 
 ### Generate Videos
 
-**CLI (recommended):**
+**Local CLI (recommended):**
 ```bash
-# SSH to server and generate
-ssh root@<IP> generate-video -p "your prompt here" -o output_name
+# Text-to-Video
+./generate-video -p "your prompt here" -o output_name
+
+# Image-to-Video
+./generate-video -p "animate this person dancing" --image photo.png -o output
 
 # Queue multiple jobs
-ssh root@<IP> 'generate-video -p "prompt 1" -o v1 --queue && generate-video -p "prompt 2" -o v2 --queue'
+./generate-video -p "prompt 1" -o v1 --queue
+./generate-video -p "prompt 2" -o v2 --queue
+```
+
+**SSH (alternative):**
+```bash
+ssh root@<IP> generate-video -p "your prompt here" -o output_name
 ```
 
 **Web UI:**
 ```
 http://<IP>:8188
 ```
-Load the `nsfw_t2v_proper_workflow` workflow.
+Load `nsfw_t2v_proper_workflow` for T2V or `nsfw_i2v_workflow` for I2V.
 
 ## CLI Reference
 
 ```bash
-generate-video -p "prompt" [options]
+./generate-video -p "prompt" [options]
 
 Options:
   -p, --prompt     Text prompt (required)
+  -i, --image      Input image for I2V mode (optional)
   -o, --output     Output filename prefix (default: nsfw_output)
-  -n, --negative   Negative prompt (default: "blurry, low quality, distorted")
+  -n, --negative   Negative prompt (default: quality filters)
   --width          Video width (default: 480)
   --height         Video height (default: 320)
-  --frames         Number of frames (default: 33 = ~2 sec)
-  --steps          Sampling steps (default: 4)
+  --frames         Number of frames (default: 100 = ~6 sec)
+  --steps          Sampling steps (default: 8)
   --cfg            CFG scale (default: 1.0)
   --seed           Random seed
   --queue          Submit and exit without waiting
@@ -75,16 +86,19 @@ Options:
 ### Examples
 
 ```bash
-# Basic generation
-generate-video -p "A woman dancing gracefully"
+# Text-to-Video (T2V)
+./generate-video -p "A woman dancing gracefully"
 
-# Higher quality, longer video
-generate-video -p "A couple walking on the beach" --frames 81 --steps 6
+# Image-to-Video (I2V)
+./generate-video -p "make her smile and wave" --image photo.png -o animated
+
+# Higher quality
+./generate-video -p "A couple walking on the beach" --cfg 2.0 --steps 10
 
 # Queue multiple jobs
-generate-video -p "Scene 1" -o scene1 --queue
-generate-video -p "Scene 2" -o scene2 --queue
-generate-video -p "Scene 3" -o scene3 --queue
+./generate-video -p "Scene 1" -o scene1 --queue
+./generate-video -p "Scene 2" -o scene2 --queue
+./generate-video -p "Scene 3" -o scene3 --queue
 ```
 
 ### Frame Count Reference
@@ -100,8 +114,8 @@ generate-video -p "Scene 3" -o scene3 --queue
 ## Recommended Settings
 
 For Phr00t Rapid AIO model:
-- **CFG:** 1.0 (required for distilled model)
-- **Steps:** 4 (default, increase to 6-8 for more detail)
+- **CFG:** 1.0 (default), up to 2-4 for stronger prompt adherence
+- **Steps:** 8 (default), can reduce to 4 for faster generation
 - **Sampler:** euler_ancestral
 - **Scheduler:** beta
 - **Shift:** 8.0 (handled automatically)
@@ -172,9 +186,12 @@ ssh root@<IP> systemctl restart comfyui
 
 ```
 pn/
-├── deploy.sh                    # One-shot deployment script
-├── generate_video.py            # CLI tool source
-├── nsfw_t2v_proper_workflow.json # ComfyUI workflow (use this one)
+├── deploy.sh                     # One-shot deployment script
+├── generate-video                # Local CLI wrapper (uploads image, runs on server)
+├── generate_video.py             # CLI tool source (deployed to server)
+├── nsfw_t2v_proper_workflow.json # ComfyUI workflow for Text-to-Video
+├── nsfw_i2v_workflow.json        # ComfyUI workflow for Image-to-Video
+├── .env                          # Server config (auto-generated)
 └── README.md
 ```
 

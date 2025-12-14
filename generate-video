@@ -5,8 +5,10 @@
 # Usage:
 #   ./generate-video -p "your prompt" -o output_name
 #   ./generate-video -p "prompt" --frames 65 --queue
+#   ./generate-video -p "animate this" --image local_photo.png -o output
 #
 # All arguments are passed through to the remote generate-video command.
+# If --image is provided, the image is automatically uploaded to the server.
 #
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,5 +25,55 @@ if [[ -z "$SERVER_IP" ]]; then
     exit 1
 fi
 
-# Pass all arguments through to remote server
-exec ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@$SERVER_IP" "generate-video $*"
+# Parse arguments to find --image or -i flag
+ARGS=()
+IMAGE_PATH=""
+SKIP_NEXT=false
+
+for arg in "$@"; do
+    if $SKIP_NEXT; then
+        IMAGE_PATH="$arg"
+        SKIP_NEXT=false
+        continue
+    fi
+
+    if [[ "$arg" == "--image" || "$arg" == "-i" ]]; then
+        SKIP_NEXT=true
+        continue
+    fi
+
+    # Handle --image=path format
+    if [[ "$arg" == --image=* ]]; then
+        IMAGE_PATH="${arg#--image=}"
+        continue
+    fi
+    if [[ "$arg" == -i=* ]]; then
+        IMAGE_PATH="${arg#-i=}"
+        continue
+    fi
+
+    ARGS+=("$arg")
+done
+
+# If image provided, upload it first
+if [[ -n "$IMAGE_PATH" ]]; then
+    if [[ ! -f "$IMAGE_PATH" ]]; then
+        echo "Error: Image file not found: $IMAGE_PATH"
+        exit 1
+    fi
+
+    REMOTE_IMAGE="/tmp/$(basename "$IMAGE_PATH")"
+    echo "Uploading image to server..."
+    scp -o ConnectTimeout=10 -o StrictHostKeyChecking=no -q "$IMAGE_PATH" "root@$SERVER_IP:$REMOTE_IMAGE"
+    if [[ $? -ne 0 ]]; then
+        echo "Error: Failed to upload image"
+        exit 1
+    fi
+    echo "Image uploaded: $REMOTE_IMAGE"
+
+    # Add the remote image path to arguments
+    ARGS+=("--image" "$REMOTE_IMAGE")
+fi
+
+# Run generate-video on server
+exec ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no "root@$SERVER_IP" "generate-video ${ARGS[*]}"

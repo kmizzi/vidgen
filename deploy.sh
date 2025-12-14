@@ -139,6 +139,7 @@ deploy() {
     scp -o StrictHostKeyChecking=no -q \
         "$SCRIPT_DIR/generate_video.py" \
         "$SCRIPT_DIR/nsfw_t2v_proper_workflow.json" \
+        "$SCRIPT_DIR/nsfw_i2v_workflow.json" \
         root@"$SERVER_IP":/root/
     echo ""
 
@@ -222,6 +223,7 @@ chmod +x /usr/local/bin/generate-video
 
 mkdir -p /opt/comfyui/ComfyUI/user/default/workflows
 cp /root/nsfw_t2v_proper_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/
+cp /root/nsfw_i2v_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/
 
 touch /var/log/video-prompts.log
 
@@ -259,11 +261,11 @@ EOF
     echo ""
     echo "  ComfyUI Web UI:  http://$SERVER_IP:8188"
     echo ""
-    echo "  Generate videos (local - recommended):"
+    echo "  Text-to-Video (T2V):"
     echo "    ./generate-video -p \"your prompt\" -o output"
     echo ""
-    echo "  Generate videos (SSH):"
-    echo "    ssh root@$SERVER_IP generate-video -p \"your prompt\" -o output"
+    echo "  Image-to-Video (I2V):"
+    echo "    ./generate-video -p \"animate this\" --image photo.png -o output"
     echo ""
     echo "  Download videos:"
     echo "    scp root@$SERVER_IP:/opt/comfyui/ComfyUI/output/*.mp4 ./"

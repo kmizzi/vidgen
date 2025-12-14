@@ -3,8 +3,12 @@
 CLI script for generating NSFW videos using WAN 2.2 Rapid AIO model via ComfyUI API.
 
 Usage:
+    # Text-to-Video:
     python generate_video.py -p "your prompt here" -o output.mp4
     python generate_video.py -p "A woman dancing gracefully" --width 720 --height 480 --frames 65
+
+    # Image-to-Video:
+    python generate_video.py -p "animate this person dancing" --image input.png -o output.mp4
 
 Requires ComfyUI to be running on the server.
 """
@@ -16,8 +20,148 @@ import time
 import sys
 import random
 import os
+import mimetypes
 
 DEFAULT_SERVER = "http://localhost:8188"
+
+
+def upload_image(server, image_path):
+    """Upload an image to ComfyUI's input folder.
+
+    Returns the filename that ComfyUI uses to reference the image.
+    """
+    if not os.path.exists(image_path):
+        raise FileNotFoundError(f"Image not found: {image_path}")
+
+    filename = os.path.basename(image_path)
+    content_type = mimetypes.guess_type(image_path)[0] or 'image/png'
+
+    # Build multipart form data
+    boundary = '----WebKitFormBoundary' + ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=16))
+
+    with open(image_path, 'rb') as f:
+        file_data = f.read()
+
+    body = b''
+    # Add file field
+    body += f'--{boundary}\r\n'.encode()
+    body += f'Content-Disposition: form-data; name="image"; filename="{filename}"\r\n'.encode()
+    body += f'Content-Type: {content_type}\r\n\r\n'.encode()
+    body += file_data
+    body += b'\r\n'
+    # Add overwrite field
+    body += f'--{boundary}\r\n'.encode()
+    body += b'Content-Disposition: form-data; name="overwrite"\r\n\r\n'
+    body += b'true\r\n'
+    body += f'--{boundary}--\r\n'.encode()
+
+    req = urllib.request.Request(
+        f"{server}/upload/image",
+        data=body,
+        headers={'Content-Type': f'multipart/form-data; boundary={boundary}'}
+    )
+
+    try:
+        resp = urllib.request.urlopen(req, timeout=60)
+        result = json.loads(resp.read())
+        return result.get('name', filename)
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        raise Exception(f"Upload failed: HTTP {e.code}: {error_body}")
+    except Exception as e:
+        raise Exception(f"Upload failed: {e}")
+
+
+def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, frames, steps, cfg, seed, filename_prefix):
+    """Build I2V (Image-to-Video) workflow using WanImageToVideo with start_image.
+
+    This workflow takes an input image and animates it based on the text prompt.
+    """
+    return {
+        "1": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {
+                "ckpt_name": "wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors"
+            }
+        },
+        "2": {
+            "class_type": "ModelSamplingSD3",
+            "inputs": {
+                "model": ["1", 0],
+                "shift": 8.0
+            }
+        },
+        "3": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": prompt,
+                "clip": ["1", 1]
+            }
+        },
+        "4": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": negative_prompt,
+                "clip": ["1", 1]
+            }
+        },
+        "9": {
+            "class_type": "LoadImage",
+            "inputs": {
+                "image": image_filename
+            }
+        },
+        "5": {
+            "class_type": "WanImageToVideo",
+            "inputs": {
+                "positive": ["3", 0],
+                "negative": ["4", 0],
+                "vae": ["1", 2],
+                "start_image": ["9", 0],
+                "width": width,
+                "height": height,
+                "length": frames,
+                "batch_size": 1
+            }
+        },
+        "6": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["2", 0],
+                "positive": ["5", 0],
+                "negative": ["5", 1],
+                "latent_image": ["5", 2],
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": "euler_ancestral",
+                "scheduler": "beta",
+                "denoise": 1.0
+            }
+        },
+        "7": {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["6", 0],
+                "vae": ["1", 2]
+            }
+        },
+        "8": {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "images": ["7", 0],
+                "frame_rate": 16,
+                "loop_count": 0,
+                "filename_prefix": filename_prefix,
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 19,
+                "save_metadata": True,
+                "pingpong": False,
+                "save_output": True
+            }
+        }
+    }
 
 
 def build_workflow(prompt, negative_prompt, width, height, frames, steps, cfg, seed, filename_prefix):
@@ -201,25 +345,31 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Text-to-Video:
   %(prog)s -p "A woman dancing in the rain"
   %(prog)s -p "A couple walking on the beach" -o beach.mp4
   %(prog)s -p "A dancer performing" --width 720 --height 480 --frames 65
-  %(prog)s -p "Your prompt" --steps 6 --cfg 1.5 --seed 42
 
-  # Queue multiple jobs quickly:
+  # Image-to-Video:
+  %(prog)s -p "animate this person dancing" --image input.png -o output
+  %(prog)s -p "make her smile and wave" -i photo.jpg --frames 50
+
+  # Queue multiple jobs:
   %(prog)s -p "Prompt 1" -o video1 --queue
   %(prog)s -p "Prompt 2" -o video2 --queue
-  %(prog)s -p "Prompt 3" -o video3 --queue
 
 Notes:
-  - Recommended settings for Rapid AIO: CFG=1, Steps=4
-  - Higher resolution/frames = longer generation time
-  - Output saved to ComfyUI output folder by default
+  - Use --image/-i for image-to-video (I2V) mode
+  - Without --image, runs in text-to-video (T2V) mode
+  - Recommended settings: CFG=1, Steps=8
+  - Output saved to ComfyUI output folder
         """
     )
 
     parser.add_argument("-p", "--prompt", required=True,
                         help="Text prompt for video generation")
+    parser.add_argument("-i", "--image", default=None,
+                        help="Input image for image-to-video mode (optional)")
     parser.add_argument("-n", "--negative", default="blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo",
                         help="Negative prompt (default: quality filters)")
     parser.add_argument("-o", "--output", default="nsfw_output",
@@ -255,11 +405,17 @@ Notes:
     if args.output.endswith('.mp4'):
         args.output = args.output[:-4]
 
+    # Determine mode
+    is_i2v = args.image is not None
+    mode_str = "Image-to-Video (I2V)" if is_i2v else "Text-to-Video (T2V)"
+
     # Print banner
     sep = "=" * 60
     print(sep)
-    print("WAN 2.2 NSFW Video Generator")
+    print(f"WAN 2.2 NSFW Video Generator - {mode_str}")
     print(sep)
+    if is_i2v:
+        print(f"Image:      {args.image}")
     print(f"Prompt:     {args.prompt[:50]}{'...' if len(args.prompt) > 50 else ''}")
     print(f"Resolution: {args.width}x{args.height}")
     print(f"Frames:     {args.frames} (~{args.frames/16:.1f}s at 16fps)")
@@ -268,18 +424,44 @@ Notes:
     print(sep)
     print()
 
+    # Handle image upload for I2V mode
+    image_filename = None
+    if is_i2v:
+        print(f"Uploading image: {args.image}...")
+        try:
+            image_filename = upload_image(args.server, args.image)
+            print(f"Image uploaded as: {image_filename}")
+        except Exception as e:
+            print(f"Failed to upload image: {e}")
+            sys.exit(1)
+        print()
+
     # Build workflow
-    workflow = build_workflow(
-        prompt=args.prompt,
-        negative_prompt=args.negative,
-        width=args.width,
-        height=args.height,
-        frames=args.frames,
-        steps=args.steps,
-        cfg=args.cfg,
-        seed=args.seed,
-        filename_prefix=args.output
-    )
+    if is_i2v:
+        workflow = build_i2v_workflow(
+            prompt=args.prompt,
+            negative_prompt=args.negative,
+            image_filename=image_filename,
+            width=args.width,
+            height=args.height,
+            frames=args.frames,
+            steps=args.steps,
+            cfg=args.cfg,
+            seed=args.seed,
+            filename_prefix=args.output
+        )
+    else:
+        workflow = build_workflow(
+            prompt=args.prompt,
+            negative_prompt=args.negative,
+            width=args.width,
+            height=args.height,
+            frames=args.frames,
+            steps=args.steps,
+            cfg=args.cfg,
+            seed=args.seed,
+            filename_prefix=args.output
+        )
 
     # Submit to ComfyUI
     print("Submitting workflow...")
@@ -305,7 +487,8 @@ Notes:
         import datetime
         with open(log_file, "a") as f:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"{timestamp} | {prompt_id[:8]} | {args.output} | {args.prompt}\n")
+            mode_tag = "I2V" if is_i2v else "T2V"
+            f.write(f"{timestamp} | {mode_tag} | {prompt_id[:8]} | {args.output} | {args.prompt}\n")
     except Exception:
         pass  # Don't fail if logging fails
 
