@@ -73,102 +73,153 @@ def upload_image(server, image_path):
 
 
 def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, frames, steps, cfg, seed, filename_prefix):
-    """Build I2V (Image-to-Video) workflow using WanImageToVideo with CLIP Vision encoding.
+    """Build I2V (Image-to-Video) workflow using official WAN 2.2 I2V models with two-stage sampling.
 
-    This workflow takes an input image and animates it based on the text prompt.
-    CLIP Vision encoding ensures the subject's appearance is preserved in the video.
+    This workflow uses the official WAN 2.2 I2V architecture with:
+    - High-noise model for initial steps (0-50% of steps)
+    - Low-noise model for remaining steps (50-100%)
+    - UMT5-XXL text encoder (not CLIP)
+    - WAN 2.1 VAE
+    - CLIP Vision for image conditioning
 
-    Flow:
-    LoadImage -> CLIPVisionEncode -> WanImageToVideo -> KSampler -> VAEDecode -> VideoCombine
-                 CLIPVisionLoader -^
+    This two-stage approach significantly improves identity preservation from the input image.
     """
+    # Calculate step split (50% for each stage)
+    stage1_end = steps // 2
+    stage2_start = stage1_end
+
     return {
         "1": {
-            "class_type": "CheckpointLoaderSimple",
-            "inputs": {
-                "ckpt_name": "wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors"
-            }
-        },
-        "2": {
-            "class_type": "ModelSamplingSD3",
-            "inputs": {
-                "model": ["1", 0],
-                "shift": 8.0
-            }
-        },
-        "3": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": prompt,
-                "clip": ["1", 1]
-            }
-        },
-        "4": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {
-                "text": negative_prompt,
-                "clip": ["1", 1]
-            }
-        },
-        "5": {
             "class_type": "LoadImage",
             "inputs": {
                 "image": image_filename
             }
         },
+        "2": {
+            "class_type": "ImageScale",
+            "inputs": {
+                "image": ["1", 0],
+                "upscale_method": "lanczos",
+                "width": width,
+                "height": height,
+                "crop": "disabled"
+            }
+        },
+        "3": {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+                "type": "wan"
+            }
+        },
+        "4": {
+            "class_type": "VAELoader",
+            "inputs": {
+                "vae_name": "wan_2.1_vae.safetensors"
+            }
+        },
+        "5": {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+                "weight_dtype": "default"
+            }
+        },
         "6": {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+                "weight_dtype": "default"
+            }
+        },
+        "7": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": prompt,
+                "clip": ["3", 0]
+            }
+        },
+        "8": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": negative_prompt,
+                "clip": ["3", 0]
+            }
+        },
+        "9": {
             "class_type": "CLIPVisionLoader",
             "inputs": {
                 "clip_name": "sigclip_vision_patch14_384.safetensors"
             }
         },
-        "7": {
+        "10": {
             "class_type": "CLIPVisionEncode",
             "inputs": {
-                "clip_vision": ["6", 0],
-                "image": ["5", 0]
+                "clip_vision": ["9", 0],
+                "image": ["2", 0]
             }
         },
-        "8": {
+        "11": {
             "class_type": "WanImageToVideo",
             "inputs": {
-                "positive": ["3", 0],
-                "negative": ["4", 0],
-                "vae": ["1", 2],
-                "clip_vision_output": ["7", 0],
-                "start_image": ["5", 0],
+                "positive": ["7", 0],
+                "negative": ["8", 0],
+                "vae": ["4", 0],
+                "clip_vision_output": ["10", 0],
+                "start_image": ["2", 0],
                 "width": width,
                 "height": height,
                 "length": frames,
                 "batch_size": 1
             }
         },
-        "9": {
-            "class_type": "KSampler",
+        "12": {
+            "class_type": "KSamplerAdvanced",
             "inputs": {
-                "model": ["2", 0],
-                "positive": ["8", 0],
-                "negative": ["8", 1],
-                "latent_image": ["8", 2],
-                "seed": seed,
+                "model": ["5", 0],
+                "add_noise": "enable",
+                "noise_seed": seed,
                 "steps": steps,
                 "cfg": cfg,
-                "sampler_name": "euler_ancestral",
+                "sampler_name": "euler",
                 "scheduler": "beta",
-                "denoise": 1.0
+                "positive": ["11", 0],
+                "negative": ["11", 1],
+                "latent_image": ["11", 2],
+                "start_at_step": 0,
+                "end_at_step": stage1_end,
+                "return_with_leftover_noise": "enable"
             }
         },
-        "10": {
+        "13": {
+            "class_type": "KSamplerAdvanced",
+            "inputs": {
+                "model": ["6", 0],
+                "add_noise": "disable",
+                "noise_seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": "euler",
+                "scheduler": "beta",
+                "positive": ["11", 0],
+                "negative": ["11", 1],
+                "latent_image": ["12", 0],
+                "start_at_step": stage2_start,
+                "end_at_step": steps,
+                "return_with_leftover_noise": "disable"
+            }
+        },
+        "14": {
             "class_type": "VAEDecode",
             "inputs": {
-                "samples": ["9", 0],
-                "vae": ["1", 2]
+                "samples": ["13", 0],
+                "vae": ["4", 0]
             }
         },
-        "11": {
+        "15": {
             "class_type": "VHS_VideoCombine",
             "inputs": {
-                "images": ["10", 0],
+                "images": ["14", 0],
                 "frame_rate": 16,
                 "loop_count": 0,
                 "filename_prefix": filename_prefix,
@@ -399,8 +450,8 @@ Notes:
                         help="Video height (default: 320)")
     parser.add_argument("--frames", type=int, default=100,
                         help="Number of frames (default: 100 = ~6 sec at 16fps)")
-    parser.add_argument("--steps", type=int, default=8,
-                        help="Sampling steps (default: 8)")
+    parser.add_argument("--steps", type=int, default=None,
+                        help="Sampling steps (default: 8 for T2V, 20 for I2V)")
     parser.add_argument("--cfg", type=float, default=1.0,
                         help="CFG scale (default: 1.0, recommended for Rapid AIO)")
     parser.add_argument("--seed", type=int, default=None,
@@ -414,9 +465,16 @@ Notes:
 
     args = parser.parse_args()
 
+    # Determine mode first to set appropriate defaults
+    is_i2v = args.image is not None
+
     # Generate random seed if not provided
     if args.seed is None:
         args.seed = random.randint(0, 2**32 - 1)
+
+    # Set default steps based on mode (I2V uses 20 steps for two-stage sampling)
+    if args.steps is None:
+        args.steps = 20 if is_i2v else 8
 
     # Strip path from output - ComfyUI only accepts filename prefix
     args.output = os.path.basename(args.output)
@@ -424,8 +482,7 @@ Notes:
     if args.output.endswith('.mp4'):
         args.output = args.output[:-4]
 
-    # Determine mode
-    is_i2v = args.image is not None
+    # Set mode string for display
     mode_str = "Image-to-Video (I2V)" if is_i2v else "Text-to-Video (T2V)"
 
     # Print banner

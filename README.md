@@ -4,11 +4,11 @@ Generate uncensored AI videos using WAN 2.2 Rapid AIO on a DigitalOcean GPU Drop
 
 ## Features
 
-- **Text-to-Video (T2V)** - Generate videos from text prompts
-- **Image-to-Video (I2V)** - Animate images with text guidance
-- **Phr00t's Rapid AIO NSFW Model** - Fast, high-quality uncensored video generation
+- **Text-to-Video (T2V)** - Generate videos from text prompts using Phr00t's Rapid AIO
+- **Image-to-Video (I2V)** - Animate images with identity preservation using official WAN 2.2 I2V models
+- **Two-Stage Sampling** - I2V uses high-noise/low-noise model switching for better results
 - **CLI + Web UI** - Use `generate-video` command or ComfyUI interface
-- **One-shot deployment** - Single script sets up everything
+- **One-shot deployment** - Single script sets up everything (~58GB of models)
 
 ## Quick Start
 
@@ -33,9 +33,11 @@ doctl auth init
 This will:
 1. Create a GPU droplet (H100 80GB)
 2. Install ComfyUI with CUDA
-3. Download the NSFW model (~23GB)
-4. Set up systemd service
-5. Install CLI tools
+3. Download T2V model (~23GB) - Phr00t Rapid AIO NSFW
+4. Download I2V models (~28GB) - Official WAN 2.2 high/low noise
+5. Download text encoder & VAE (~7GB) - UMT5-XXL + WAN 2.1 VAE
+6. Set up systemd service
+7. Install CLI tools
 
 ### Generate Videos
 
@@ -76,7 +78,7 @@ Options:
   --width          Video width (default: 480)
   --height         Video height (default: 320)
   --frames         Number of frames (default: 100 = ~6 sec)
-  --steps          Sampling steps (default: 8)
+  --steps          Sampling steps (default: 8 for T2V, 20 for I2V)
   --cfg            CFG scale (default: 1.0)
   --seed           Random seed
   --queue          Submit and exit without waiting
@@ -197,13 +199,26 @@ pn/
 
 ## Technical Details
 
+### Text-to-Video (T2V)
 - **Model:** Phr00t WAN 2.2 Rapid Mega AIO NSFW v12.1 (~23GB)
-- **Architecture:** 14B parameter video diffusion model
+- **Architecture:** 14B parameter distilled video diffusion model
+- **Sampler:** euler_ancestral, beta scheduler, 8 steps
 - **Key Node:** `WanImageToVideo` - creates temporally coherent video latents
-- **Output:** H.264 MP4 @ 16fps
+
+### Image-to-Video (I2V)
+- **Models:** Official WAN 2.2 I2V (high-noise + low-noise, ~28GB total)
+- **Text Encoder:** UMT5-XXL FP8 (~6.5GB)
+- **VAE:** WAN 2.1 VAE (~243MB)
+- **CLIP Vision:** SigCLIP Vision 384 (~850MB)
+- **Architecture:** Two-stage sampling (high-noise for 0-50%, low-noise for 50-100%)
+- **Sampler:** euler, beta scheduler, 20 steps (10 per stage)
+
+### Output
+- **Format:** H.264 MP4 @ 16fps
 
 ## Resources
 
-- [Phr00t Rapid AIO Model](https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne)
+- [Phr00t Rapid AIO Model](https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne) - T2V model
+- [Official WAN 2.2 I2V Models](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged) - I2V models
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - [DigitalOcean GPU Droplets](https://www.digitalocean.com/products/gpu-droplets)

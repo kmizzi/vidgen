@@ -1,175 +1,225 @@
 {
-  "last_node_id": 11,
-  "last_link_id": 17,
+  "last_node_id": 18,
+  "last_link_id": 25,
   "nodes": [
     {
       "id": 1,
-      "type": "CheckpointLoaderSimple",
-      "pos": [50, 200],
-      "size": [315, 98],
+      "type": "LoadImage",
+      "pos": [50, 100],
+      "size": [315, 314],
       "flags": {},
       "order": 0,
       "mode": 0,
       "outputs": [
-        {"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0},
-        {"name": "CLIP", "type": "CLIP", "links": [2, 3], "slot_index": 1},
-        {"name": "VAE", "type": "VAE", "links": [7, 16], "slot_index": 2}
-      ],
-      "properties": {"Node name for S&R": "CheckpointLoaderSimple"},
-      "widgets_values": ["wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors"]
-    },
-    {
-      "id": 2,
-      "type": "ModelSamplingSD3",
-      "pos": [450, 50],
-      "size": [250, 58],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [{"name": "model", "type": "MODEL", "link": 1}],
-      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [4], "slot_index": 0}],
-      "properties": {"Node name for S&R": "ModelSamplingSD3"},
-      "widgets_values": [8.0]
-    },
-    {
-      "id": 3,
-      "type": "CLIPTextEncode",
-      "pos": [450, 150],
-      "size": [400, 100],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [{"name": "clip", "type": "CLIP", "link": 2}],
-      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [5], "slot_index": 0}],
-      "title": "Positive Prompt",
-      "properties": {"Node name for S&R": "CLIPTextEncode"},
-      "widgets_values": ["the woman in the photo is smiling"]
-    },
-    {
-      "id": 4,
-      "type": "CLIPTextEncode",
-      "pos": [450, 300],
-      "size": [400, 100],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [{"name": "clip", "type": "CLIP", "link": 3}],
-      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [6], "slot_index": 0}],
-      "title": "Negative Prompt",
-      "properties": {"Node name for S&R": "CLIPTextEncode"},
-      "widgets_values": ["blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo"]
-    },
-    {
-      "id": 5,
-      "type": "LoadImage",
-      "pos": [50, 400],
-      "size": [315, 314],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [8, 9], "slot_index": 0},
+        {"name": "IMAGE", "type": "IMAGE", "links": [1], "slot_index": 0},
         {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "LoadImage"},
       "widgets_values": ["input.png", "image"]
     },
     {
-      "id": 6,
-      "type": "CLIPVisionLoader",
-      "pos": [50, 750],
+      "id": 2,
+      "type": "ImageScale",
+      "pos": [50, 450],
+      "size": [315, 130],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [{"name": "image", "type": "IMAGE", "link": 1}],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [2, 3], "slot_index": 0}],
+      "properties": {"Node name for S&R": "ImageScale"},
+      "widgets_values": ["lanczos", 832, 480, "disabled"]
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [400, 50],
+      "size": [315, 82],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "outputs": [{"name": "CLIP", "type": "CLIP", "links": [4, 5], "slot_index": 0}],
+      "properties": {"Node name for S&R": "CLIPLoader"},
+      "widgets_values": ["umt5_xxl_fp8_e4m3fn_scaled.safetensors", "wan"]
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [400, 170],
       "size": [315, 58],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "outputs": [{"name": "VAE", "type": "VAE", "links": [6, 7], "slot_index": 0}],
+      "properties": {"Node name for S&R": "VAELoader"},
+      "widgets_values": ["wan_2.1_vae.safetensors"]
+    },
+    {
+      "id": 5,
+      "type": "UNETLoader",
+      "pos": [400, 270],
+      "size": [315, 82],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [8], "slot_index": 0}],
+      "title": "High Noise Model",
+      "properties": {"Node name for S&R": "UNETLoader"},
+      "widgets_values": ["wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors", "default"]
+    },
+    {
+      "id": 6,
+      "type": "UNETLoader",
+      "pos": [400, 390],
+      "size": [315, 82],
       "flags": {},
       "order": 5,
       "mode": 0,
-      "outputs": [
-        {"name": "CLIP_VISION", "type": "CLIP_VISION", "links": [10], "slot_index": 0}
-      ],
+      "outputs": [{"name": "MODEL", "type": "MODEL", "links": [9], "slot_index": 0}],
+      "title": "Low Noise Model",
+      "properties": {"Node name for S&R": "UNETLoader"},
+      "widgets_values": ["wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors", "default"]
+    },
+    {
+      "id": 7,
+      "type": "CLIPTextEncode",
+      "pos": [750, 50],
+      "size": [400, 100],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 4}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [10], "slot_index": 0}],
+      "title": "Positive Prompt",
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": ["the woman in the photo is smiling, looking at camera, smooth motion, high quality video"]
+    },
+    {
+      "id": 8,
+      "type": "CLIPTextEncode",
+      "pos": [750, 180],
+      "size": [400, 100],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [{"name": "clip", "type": "CLIP", "link": 5}],
+      "outputs": [{"name": "CONDITIONING", "type": "CONDITIONING", "links": [11], "slot_index": 0}],
+      "title": "Negative Prompt",
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": ["blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo, different person, changing face"]
+    },
+    {
+      "id": 9,
+      "type": "CLIPVisionLoader",
+      "pos": [50, 620],
+      "size": [315, 58],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "outputs": [{"name": "CLIP_VISION", "type": "CLIP_VISION", "links": [12], "slot_index": 0}],
       "properties": {"Node name for S&R": "CLIPVisionLoader"},
       "widgets_values": ["sigclip_vision_patch14_384.safetensors"]
     },
     {
-      "id": 7,
-      "type": "CLIPVisionEncode",
-      "pos": [450, 500],
-      "size": [250, 80],
-      "flags": {},
-      "order": 6,
-      "mode": 0,
-      "inputs": [
-        {"name": "clip_vision", "type": "CLIP_VISION", "link": 10},
-        {"name": "image", "type": "IMAGE", "link": 9}
-      ],
-      "outputs": [
-        {"name": "CLIP_VISION_OUTPUT", "type": "CLIP_VISION_OUTPUT", "links": [11], "slot_index": 0}
-      ],
-      "properties": {"Node name for S&R": "CLIPVisionEncode"}
-    },
-    {
-      "id": 8,
-      "type": "WanImageToVideo",
-      "pos": [900, 200],
-      "size": [300, 200],
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {"name": "positive", "type": "CONDITIONING", "link": 5},
-        {"name": "negative", "type": "CONDITIONING", "link": 6},
-        {"name": "vae", "type": "VAE", "link": 7},
-        {"name": "clip_vision_output", "type": "CLIP_VISION_OUTPUT", "link": 11},
-        {"name": "start_image", "type": "IMAGE", "link": 8}
-      ],
-      "outputs": [
-        {"name": "positive", "type": "CONDITIONING", "links": [12], "slot_index": 0},
-        {"name": "negative", "type": "CONDITIONING", "links": [13], "slot_index": 1},
-        {"name": "latent", "type": "LATENT", "links": [14], "slot_index": 2}
-      ],
-      "properties": {"Node name for S&R": "WanImageToVideo"},
-      "widgets_values": [480, 320, 100, 1]
-    },
-    {
-      "id": 9,
-      "type": "KSampler",
-      "pos": [1250, 200],
-      "size": [300, 262],
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [
-        {"name": "model", "type": "MODEL", "link": 4},
-        {"name": "positive", "type": "CONDITIONING", "link": 12},
-        {"name": "negative", "type": "CONDITIONING", "link": 13},
-        {"name": "latent_image", "type": "LATENT", "link": 14}
-      ],
-      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [15], "slot_index": 0}],
-      "properties": {"Node name for S&R": "KSampler"},
-      "widgets_values": [12345, "randomize", 8, 1, "euler_ancestral", "beta", 1]
-    },
-    {
       "id": 10,
-      "type": "VAEDecode",
-      "pos": [1600, 250],
-      "size": [150, 46],
+      "type": "CLIPVisionEncode",
+      "pos": [400, 520],
+      "size": [250, 80],
       "flags": {},
       "order": 9,
       "mode": 0,
       "inputs": [
-        {"name": "samples", "type": "LATENT", "link": 15},
-        {"name": "vae", "type": "VAE", "link": 16}
+        {"name": "clip_vision", "type": "CLIP_VISION", "link": 12},
+        {"name": "image", "type": "IMAGE", "link": 2}
       ],
-      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [17], "slot_index": 0}],
-      "properties": {"Node name for S&R": "VAEDecode"}
+      "outputs": [{"name": "CLIP_VISION_OUTPUT", "type": "CLIP_VISION_OUTPUT", "links": [13], "slot_index": 0}],
+      "properties": {"Node name for S&R": "CLIPVisionEncode"}
     },
     {
       "id": 11,
-      "type": "VHS_VideoCombine",
-      "pos": [1800, 100],
-      "size": [350, 450],
+      "type": "WanImageToVideo",
+      "pos": [750, 320],
+      "size": [300, 220],
       "flags": {},
       "order": 10,
       "mode": 0,
-      "inputs": [{"name": "images", "type": "IMAGE", "link": 17}],
+      "inputs": [
+        {"name": "positive", "type": "CONDITIONING", "link": 10},
+        {"name": "negative", "type": "CONDITIONING", "link": 11},
+        {"name": "vae", "type": "VAE", "link": 6},
+        {"name": "clip_vision_output", "type": "CLIP_VISION_OUTPUT", "link": 13},
+        {"name": "start_image", "type": "IMAGE", "link": 3}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [14, 18], "slot_index": 0},
+        {"name": "negative", "type": "CONDITIONING", "links": [15, 19], "slot_index": 1},
+        {"name": "latent", "type": "LATENT", "links": [16], "slot_index": 2}
+      ],
+      "properties": {"Node name for S&R": "WanImageToVideo"},
+      "widgets_values": [832, 480, 81, 1]
+    },
+    {
+      "id": 12,
+      "type": "KSamplerAdvanced",
+      "pos": [1100, 100],
+      "size": [300, 334],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 8},
+        {"name": "positive", "type": "CONDITIONING", "link": 14},
+        {"name": "negative", "type": "CONDITIONING", "link": 15},
+        {"name": "latent_image", "type": "LATENT", "link": 16}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [17], "slot_index": 0}],
+      "title": "Stage 1: High Noise (Steps 0-10)",
+      "properties": {"Node name for S&R": "KSamplerAdvanced"},
+      "widgets_values": ["enable", 12345, "randomize", 20, 5.0, "euler", "beta", 0, 10, "enable"]
+    },
+    {
+      "id": 13,
+      "type": "KSamplerAdvanced",
+      "pos": [1100, 470],
+      "size": [300, 334],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 9},
+        {"name": "positive", "type": "CONDITIONING", "link": 18},
+        {"name": "negative", "type": "CONDITIONING", "link": 19},
+        {"name": "latent_image", "type": "LATENT", "link": 17}
+      ],
+      "outputs": [{"name": "LATENT", "type": "LATENT", "links": [20], "slot_index": 0}],
+      "title": "Stage 2: Low Noise (Steps 10-20)",
+      "properties": {"Node name for S&R": "KSamplerAdvanced"},
+      "widgets_values": ["disable", 12345, "randomize", 20, 5.0, "euler", "beta", 10, 20, "disable"]
+    },
+    {
+      "id": 14,
+      "type": "VAEDecode",
+      "pos": [1450, 300],
+      "size": [150, 46],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 20},
+        {"name": "vae", "type": "VAE", "link": 7}
+      ],
+      "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [21], "slot_index": 0}],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 15,
+      "type": "VHS_VideoCombine",
+      "pos": [1650, 100],
+      "size": [350, 450],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [{"name": "images", "type": "IMAGE", "link": 21}],
       "outputs": [{"name": "Filenames", "type": "VHS_FILENAMES", "links": null}],
       "properties": {"Node name for S&R": "VHS_VideoCombine"},
       "widgets_values": {
@@ -191,28 +241,32 @@
     }
   ],
   "links": [
-    [1, 1, 0, 2, 0, "MODEL"],
-    [2, 1, 1, 3, 0, "CLIP"],
-    [3, 1, 1, 4, 0, "CLIP"],
-    [4, 2, 0, 9, 0, "MODEL"],
-    [5, 3, 0, 8, 0, "CONDITIONING"],
-    [6, 4, 0, 8, 1, "CONDITIONING"],
-    [7, 1, 2, 8, 2, "VAE"],
-    [8, 5, 0, 8, 4, "IMAGE"],
-    [9, 5, 0, 7, 1, "IMAGE"],
-    [10, 6, 0, 7, 0, "CLIP_VISION"],
-    [11, 7, 0, 8, 3, "CLIP_VISION_OUTPUT"],
-    [12, 8, 0, 9, 1, "CONDITIONING"],
-    [13, 8, 1, 9, 2, "CONDITIONING"],
-    [14, 8, 2, 9, 3, "LATENT"],
-    [15, 9, 0, 10, 0, "LATENT"],
-    [16, 1, 2, 10, 1, "VAE"],
-    [17, 10, 0, 11, 0, "IMAGE"]
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 2, 0, 10, 1, "IMAGE"],
+    [3, 2, 0, 11, 4, "IMAGE"],
+    [4, 3, 0, 7, 0, "CLIP"],
+    [5, 3, 0, 8, 0, "CLIP"],
+    [6, 4, 0, 11, 2, "VAE"],
+    [7, 4, 0, 14, 1, "VAE"],
+    [8, 5, 0, 12, 0, "MODEL"],
+    [9, 6, 0, 13, 0, "MODEL"],
+    [10, 7, 0, 11, 0, "CONDITIONING"],
+    [11, 8, 0, 11, 1, "CONDITIONING"],
+    [12, 9, 0, 10, 0, "CLIP_VISION"],
+    [13, 10, 0, 11, 3, "CLIP_VISION_OUTPUT"],
+    [14, 11, 0, 12, 1, "CONDITIONING"],
+    [15, 11, 1, 12, 2, "CONDITIONING"],
+    [16, 11, 2, 12, 3, "LATENT"],
+    [17, 12, 0, 13, 3, "LATENT"],
+    [18, 11, 0, 13, 1, "CONDITIONING"],
+    [19, 11, 1, 13, 2, "CONDITIONING"],
+    [20, 13, 0, 14, 0, "LATENT"],
+    [21, 14, 0, 15, 0, "IMAGE"]
   ],
   "groups": [
     {
-      "title": "WAN 2.2 NSFW I2V - Image to Video",
-      "bounding": [30, 20, 2150, 820],
+      "title": "WAN 2.2 I2V - Two-Stage Sampling (Identity Preserving)",
+      "bounding": [30, 0, 2000, 900],
       "color": "#8A2BE2",
       "font_size": 24
     }

@@ -155,11 +155,11 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
 # Progress markers: PROGRESS:<step>:<total>:<message>
-echo "PROGRESS:2:8:Installing system packages..."
+echo "PROGRESS:2:10:Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq git python3-pip python3-venv ffmpeg libgl1 > /dev/null
 
-echo "PROGRESS:3:8:Setting up ComfyUI..."
+echo "PROGRESS:3:10:Setting up ComfyUI..."
 if [[ ! -d /opt/comfyui/ComfyUI ]]; then
     mkdir -p /opt/comfyui
     cd /opt/comfyui
@@ -176,7 +176,7 @@ pip install -q --upgrade pip
 pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 pip install -q -r requirements.txt
 
-echo "PROGRESS:4:8:Installing VideoHelperSuite..."
+echo "PROGRESS:4:10:Installing VideoHelperSuite..."
 if [[ ! -d custom_nodes/ComfyUI-VideoHelperSuite ]]; then
     cd custom_nodes
     git clone -q https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
@@ -185,14 +185,49 @@ if [[ ! -d custom_nodes/ComfyUI-VideoHelperSuite ]]; then
     cd ../..
 fi
 
-echo "PROGRESS:5:8:Downloading models (~23GB + 850MB, please wait)..."
+echo "PROGRESS:5:10:Downloading T2V model (~23GB)..."
 mkdir -p models/checkpoints
 mkdir -p models/clip_vision
+mkdir -p models/diffusion_models
+mkdir -p models/text_encoders
+mkdir -p models/vae
 if [[ ! -f models/checkpoints/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors ]]; then
     wget -q -O models/checkpoints/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors \
         "https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne/resolve/main/Mega-v12/wan2.2-rapid-mega-aio-nsfw-v12.1.safetensors"
 else
-    echo "Main model already downloaded"
+    echo "T2V model already downloaded"
+fi
+
+echo "PROGRESS:6:10:Downloading I2V models (~28GB)..."
+# Download WAN 2.2 I2V high-noise model
+if [[ ! -f models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors ]]; then
+    wget -q -O models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors \
+        "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+else
+    echo "I2V high-noise model already downloaded"
+fi
+# Download WAN 2.2 I2V low-noise model
+if [[ ! -f models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors ]]; then
+    wget -q -O models/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors \
+        "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged/resolve/main/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+else
+    echo "I2V low-noise model already downloaded"
+fi
+
+echo "PROGRESS:7:10:Downloading text encoder & VAE (~6.5GB)..."
+# Download UMT5-XXL text encoder for I2V
+if [[ ! -f models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors ]]; then
+    wget -q -O models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors \
+        "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged/resolve/main/split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+else
+    echo "UMT5-XXL text encoder already downloaded"
+fi
+# Download WAN 2.1 VAE
+if [[ ! -f models/vae/wan_2.1_vae.safetensors ]]; then
+    wget -q -O models/vae/wan_2.1_vae.safetensors \
+        "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged/resolve/main/split_files/vae/wan_2.1_vae.safetensors"
+else
+    echo "WAN 2.1 VAE already downloaded"
 fi
 # Download CLIP Vision model for I2V
 if [[ ! -f models/clip_vision/sigclip_vision_patch14_384.safetensors ]]; then
@@ -202,7 +237,7 @@ else
     echo "CLIP Vision model already downloaded"
 fi
 
-echo "PROGRESS:6:8:Creating systemd service..."
+echo "PROGRESS:8:10:Creating systemd service..."
 cat > /etc/systemd/system/comfyui.service << 'EOF'
 [Unit]
 Description=ComfyUI Server
@@ -225,7 +260,7 @@ systemctl daemon-reload
 systemctl enable comfyui > /dev/null 2>&1
 systemctl restart comfyui
 
-echo "PROGRESS:7:8:Installing CLI tool..."
+echo "PROGRESS:9:10:Installing CLI tool..."
 cp /root/generate_video.py /usr/local/bin/generate-video
 chmod +x /usr/local/bin/generate-video
 
@@ -235,7 +270,7 @@ cp /root/nsfw_i2v_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/
 
 touch /var/log/video-prompts.log
 
-echo "PROGRESS:8:8:Waiting for ComfyUI to start..."
+echo "PROGRESS:10:10:Waiting for ComfyUI to start..."
 for i in {1..30}; do
     if curl -s http://localhost:8188 > /dev/null 2>&1; then
         break
