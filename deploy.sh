@@ -135,11 +135,12 @@ deploy() {
     log "Starting deployment to $SERVER_IP..."
 
     # Copy files
-    progress_bar 1 8 "Copying files to server...                    "
+    progress_bar 1 12 "Copying files to server...                    "
     scp -o StrictHostKeyChecking=no -q \
         "$SCRIPT_DIR/generate_video.py" \
         "$SCRIPT_DIR/nsfw_t2v_proper_workflow.json" \
         "$SCRIPT_DIR/nsfw_i2v_workflow.json" \
+        "$SCRIPT_DIR/nsfw_i2i_workflow.json" \
         root@"$SERVER_IP":/root/
     echo ""
 
@@ -155,11 +156,11 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
 # Progress markers: PROGRESS:<step>:<total>:<message>
-echo "PROGRESS:2:10:Installing system packages..."
+echo "PROGRESS:2:12:Installing system packages..."
 apt-get update -qq
 apt-get install -y -qq git python3-pip python3-venv ffmpeg libgl1 > /dev/null
 
-echo "PROGRESS:3:10:Setting up ComfyUI..."
+echo "PROGRESS:3:12:Setting up ComfyUI..."
 if [[ ! -d /opt/comfyui/ComfyUI ]]; then
     mkdir -p /opt/comfyui
     cd /opt/comfyui
@@ -176,7 +177,7 @@ pip install -q --upgrade pip
 pip install -q torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 pip install -q -r requirements.txt
 
-echo "PROGRESS:4:10:Installing VideoHelperSuite..."
+echo "PROGRESS:4:12:Installing VideoHelperSuite..."
 if [[ ! -d custom_nodes/ComfyUI-VideoHelperSuite ]]; then
     cd custom_nodes
     git clone -q https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
@@ -185,7 +186,7 @@ if [[ ! -d custom_nodes/ComfyUI-VideoHelperSuite ]]; then
     cd ../..
 fi
 
-echo "PROGRESS:5:10:Downloading T2V model (~23GB)..."
+echo "PROGRESS:5:12:Downloading T2V model (~23GB)..."
 mkdir -p models/checkpoints
 mkdir -p models/clip_vision
 mkdir -p models/diffusion_models
@@ -198,7 +199,7 @@ else
     echo "T2V model already downloaded"
 fi
 
-echo "PROGRESS:6:10:Downloading I2V models (~28GB)..."
+echo "PROGRESS:6:12:Downloading I2V models (~28GB)..."
 # Download WAN 2.2 I2V high-noise model
 if [[ ! -f models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors ]]; then
     wget -q -O models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors \
@@ -214,7 +215,7 @@ else
     echo "I2V low-noise model already downloaded"
 fi
 
-echo "PROGRESS:7:10:Downloading text encoder & VAE (~6.5GB)..."
+echo "PROGRESS:7:12:Downloading text encoder & VAE (~6.5GB)..."
 # Download UMT5-XXL text encoder for I2V
 if [[ ! -f models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors ]]; then
     wget -q -O models/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors \
@@ -237,7 +238,57 @@ else
     echo "CLIP Vision model already downloaded"
 fi
 
-echo "PROGRESS:8:10:Creating systemd service..."
+echo "PROGRESS:8:12:Downloading I2I models (~12GB)..."
+# Download RealVisXL SDXL model for I2I
+if [[ ! -f models/checkpoints/realvisxl_v50.safetensors ]]; then
+    wget -q -O models/checkpoints/realvisxl_v50.safetensors \
+        "https://huggingface.co/SG161222/RealVisXL_V5.0/resolve/main/RealVisXL_V5.0_fp16.safetensors"
+else
+    echo "RealVisXL model already downloaded"
+fi
+
+# Install IP-Adapter extension
+if [[ ! -d custom_nodes/ComfyUI_IPAdapter_plus ]]; then
+    cd custom_nodes
+    git clone -q https://github.com/cubiq/ComfyUI_IPAdapter_plus.git
+    cd ..
+fi
+
+echo "PROGRESS:9:12:Downloading IP-Adapter FaceID models..."
+mkdir -p models/ipadapter
+mkdir -p models/loras
+
+# IP-Adapter FaceID Plus V2 for SDXL
+if [[ ! -f models/ipadapter/ip-adapter-faceid-plusv2_sdxl.bin ]]; then
+    wget -q -O models/ipadapter/ip-adapter-faceid-plusv2_sdxl.bin \
+        "https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl.bin"
+fi
+# IP-Adapter FaceID LoRA
+if [[ ! -f models/loras/ip-adapter-faceid-plusv2_sdxl_lora.safetensors ]]; then
+    wget -q -O models/loras/ip-adapter-faceid-plusv2_sdxl_lora.safetensors \
+        "https://huggingface.co/h94/IP-Adapter-FaceID/resolve/main/ip-adapter-faceid-plusv2_sdxl_lora.safetensors"
+fi
+# CLIP Vision H-14 for IP-Adapter
+if [[ ! -f models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors ]]; then
+    wget -q -O models/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors \
+        "https://huggingface.co/h94/IP-Adapter/resolve/main/models/image_encoder/model.safetensors"
+fi
+
+echo "PROGRESS:10:12:Downloading InsightFace models..."
+# InsightFace buffalo_l models (required by IP-Adapter FaceID)
+mkdir -p models/insightface/models/buffalo_l
+if [[ ! -f models/insightface/models/buffalo_l/det_10g.onnx ]]; then
+    cd models/insightface/models/buffalo_l
+    wget -q "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+    unzip -q buffalo_l.zip
+    rm -f buffalo_l.zip
+    cd /opt/comfyui/ComfyUI
+fi
+
+# Install InsightFace Python package
+pip install -q insightface onnxruntime-gpu
+
+echo "PROGRESS:11:12:Creating systemd service..."
 cat > /etc/systemd/system/comfyui.service << 'EOF'
 [Unit]
 Description=ComfyUI Server
@@ -260,17 +311,19 @@ systemctl daemon-reload
 systemctl enable comfyui > /dev/null 2>&1
 systemctl restart comfyui
 
-echo "PROGRESS:9:10:Installing CLI tool..."
+echo "PROGRESS:12:12:Installing CLI tool..."
 cp /root/generate_video.py /usr/local/bin/generate-video
 chmod +x /usr/local/bin/generate-video
 
 mkdir -p /opt/comfyui/ComfyUI/user/default/workflows
 cp /root/nsfw_t2v_proper_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/
 cp /root/nsfw_i2v_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/
+cp /root/nsfw_i2i_workflow.json /opt/comfyui/ComfyUI/user/default/workflows/ 2>/dev/null || true
 
 touch /var/log/video-prompts.log
 
-echo "PROGRESS:10:10:Waiting for ComfyUI to start..."
+echo "PROGRESS:DONE"
+echo "Waiting for ComfyUI to start..."
 for i in {1..30}; do
     if curl -s http://localhost:8188 > /dev/null 2>&1; then
         break

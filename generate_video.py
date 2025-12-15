@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-CLI script for generating NSFW videos using WAN 2.2 Rapid AIO model via ComfyUI API.
+CLI script for generating NSFW content using WAN 2.2 and SDXL models via ComfyUI API.
 
 Usage:
-    # Text-to-Video:
-    python generate_video.py -p "your prompt here" -o output.mp4
+    # Text-to-Video (T2V):
+    python generate_video.py -p "your prompt here" -o output
     python generate_video.py -p "A woman dancing gracefully" --width 720 --height 480 --frames 65
 
-    # Image-to-Video:
-    python generate_video.py -p "animate this person dancing" --image input.png -o output.mp4
+    # Image-to-Video (I2V):
+    python generate_video.py -p "animate this person dancing" --image input.png -o output
+
+    # Image-to-Image (I2I) - Identity-preserving transform:
+    python generate_video.py -p "nude, realistic photo" --image photo.png --mode i2i -o output
 
 Requires ComfyUI to be running on the server.
 """
@@ -234,6 +237,108 @@ def build_i2v_workflow(prompt, negative_prompt, image_filename, width, height, f
     }
 
 
+def build_i2i_workflow(prompt, negative_prompt, image_filename, width, height, steps, cfg, seed, filename_prefix):
+    """Build I2I (Image-to-Image) workflow using IP-Adapter FaceID for identity preservation.
+
+    This workflow uses RealVisXL SDXL with IP-Adapter FaceID Plus V2 to:
+    - Extract face identity from input image
+    - Generate new image based on prompt while preserving identity
+    - Perfect for transforming images while keeping the same person
+
+    Flow:
+    LoadImage -> IPAdapterFaceID -> SDXL -> VAEDecode -> SaveImage
+    """
+    return {
+        "1": {
+            "class_type": "LoadImage",
+            "inputs": {
+                "image": image_filename
+            }
+        },
+        "2": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {
+                "ckpt_name": "realvisxl_v50.safetensors"
+            }
+        },
+        "3": {
+            "class_type": "IPAdapterUnifiedLoaderFaceID",
+            "inputs": {
+                "model": ["2", 0],
+                "preset": "FACEID PLUS V2",
+                "lora_strength": 0.85,
+                "provider": "CUDA"
+            }
+        },
+        "4": {
+            "class_type": "IPAdapterFaceID",
+            "inputs": {
+                "model": ["3", 0],
+                "ipadapter": ["3", 1],
+                "image": ["1", 0],
+                "weight": 0.85,
+                "weight_faceidv2": 0.5,
+                "weight_type": "linear",
+                "combine_embeds": "concat",
+                "start_at": 0.0,
+                "end_at": 1.0,
+                "embeds_scaling": "V only"
+            }
+        },
+        "5": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": prompt,
+                "clip": ["2", 1]
+            }
+        },
+        "6": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {
+                "text": negative_prompt,
+                "clip": ["2", 1]
+            }
+        },
+        "7": {
+            "class_type": "EmptyLatentImage",
+            "inputs": {
+                "width": width,
+                "height": height,
+                "batch_size": 1
+            }
+        },
+        "8": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["4", 0],
+                "positive": ["5", 0],
+                "negative": ["6", 0],
+                "latent_image": ["7", 0],
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": "euler_ancestral",
+                "scheduler": "normal",
+                "denoise": 1.0
+            }
+        },
+        "9": {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["8", 0],
+                "vae": ["2", 2]
+            }
+        },
+        "10": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "images": ["9", 0],
+                "filename_prefix": filename_prefix
+            }
+        }
+    }
+
+
 def build_workflow(prompt, negative_prompt, width, height, frames, steps, cfg, seed, filename_prefix):
     """Build proper T2V workflow using native WanImageToVideo for temporal consistency.
 
@@ -428,20 +533,25 @@ Examples:
   %(prog)s -p "Prompt 1" -o video1 --queue
   %(prog)s -p "Prompt 2" -o video2 --queue
 
+Modes:
+  - T2V (default): Text-to-Video using WAN 2.2
+  - I2V: Image-to-Video (--image required, default when image provided)
+  - I2I: Image-to-Image with identity preservation (--mode i2i --image)
+
 Notes:
-  - Use --image/-i for image-to-video (I2V) mode
-  - Without --image, runs in text-to-video (T2V) mode
-  - Recommended settings: CFG=1, Steps=8
+  - I2I mode preserves face identity while transforming the image
   - Output saved to ComfyUI output folder
         """
     )
 
     parser.add_argument("-p", "--prompt", required=True,
-                        help="Text prompt for video generation")
+                        help="Text prompt for generation")
     parser.add_argument("-i", "--image", default=None,
-                        help="Input image for image-to-video mode (optional)")
-    parser.add_argument("-n", "--negative", default="blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo",
-                        help="Negative prompt (default: quality filters)")
+                        help="Input image for I2V or I2I mode (optional)")
+    parser.add_argument("-m", "--mode", default=None, choices=["t2v", "i2v", "i2i"],
+                        help="Generation mode: t2v (text-to-video), i2v (image-to-video), i2i (image-to-image). Auto-detected if not specified.")
+    parser.add_argument("-n", "--negative", default=None,
+                        help="Negative prompt (auto-set based on mode if not specified)")
     parser.add_argument("-o", "--output", default="nsfw_output",
                         help="Output filename prefix - just the name, no path (default: nsfw_output)")
     parser.add_argument("--width", type=int, default=480,
@@ -465,44 +575,80 @@ Notes:
 
     args = parser.parse_args()
 
-    # Determine mode first to set appropriate defaults
-    is_i2v = args.image is not None
+    # Determine mode
+    if args.mode:
+        mode = args.mode
+    elif args.image:
+        mode = "i2v"  # Default to I2V when image provided
+    else:
+        mode = "t2v"
+
+    # Validate mode requirements
+    if mode in ["i2v", "i2i"] and not args.image:
+        print(f"Error: --image is required for {mode.upper()} mode")
+        sys.exit(1)
 
     # Generate random seed if not provided
     if args.seed is None:
         args.seed = random.randint(0, 2**32 - 1)
 
-    # Set default steps based on mode (I2V uses 20 steps for two-stage sampling)
-    if args.steps is None:
-        args.steps = 20 if is_i2v else 8
+    # Set mode-specific defaults
+    if mode == "i2i":
+        # I2I defaults: SDXL resolution, 25 steps, CFG 7
+        if args.width == 480:
+            args.width = 1024
+        if args.height == 320:
+            args.height = 1024
+        if args.steps is None:
+            args.steps = 25
+        if args.cfg == 1.0:
+            args.cfg = 7.0
+        if args.negative is None:
+            args.negative = "ugly, deformed, noisy, blurry, low quality, cartoon, anime, 3d render, bad anatomy, bad proportions, extra limbs, cloned face, disfigured, gross proportions, malformed limbs, missing arms, missing legs, mutated hands, poorly drawn face, poorly drawn hands"
+    elif mode == "i2v":
+        if args.steps is None:
+            args.steps = 20
+        if args.negative is None:
+            args.negative = "blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo, different person, changing face"
+    else:  # t2v
+        if args.steps is None:
+            args.steps = 8
+        if args.negative is None:
+            args.negative = "blurry, low quality, distorted, deformed, static, frozen, flickering, morphing, ugly, bad anatomy, extra limbs, missing limbs, watermark, text, logo"
 
     # Strip path from output - ComfyUI only accepts filename prefix
     args.output = os.path.basename(args.output)
     # Remove extension if provided
-    if args.output.endswith('.mp4'):
+    if args.output.endswith('.mp4') or args.output.endswith('.png'):
         args.output = args.output[:-4]
 
     # Set mode string for display
-    mode_str = "Image-to-Video (I2V)" if is_i2v else "Text-to-Video (T2V)"
+    mode_names = {
+        "t2v": "Text-to-Video (T2V)",
+        "i2v": "Image-to-Video (I2V)",
+        "i2i": "Image-to-Image (I2I)"
+    }
+    mode_str = mode_names[mode]
 
     # Print banner
     sep = "=" * 60
     print(sep)
-    print(f"WAN 2.2 NSFW Video Generator - {mode_str}")
+    print(f"NSFW Generator - {mode_str}")
     print(sep)
-    if is_i2v:
+    if mode in ["i2v", "i2i"]:
         print(f"Image:      {args.image}")
     print(f"Prompt:     {args.prompt[:50]}{'...' if len(args.prompt) > 50 else ''}")
     print(f"Resolution: {args.width}x{args.height}")
-    print(f"Frames:     {args.frames} (~{args.frames/16:.1f}s at 16fps)")
+    if mode != "i2i":
+        print(f"Frames:     {args.frames} (~{args.frames/16:.1f}s at 16fps)")
     print(f"Settings:   CFG={args.cfg}, Steps={args.steps}, Seed={args.seed}")
     print(f"Server:     {args.server}")
     print(sep)
     print()
 
-    # Handle image upload for I2V mode
+    # Handle image upload for I2V/I2I modes
     image_filename = None
-    if is_i2v:
+    if mode in ["i2v", "i2i"]:
         print(f"Uploading image: {args.image}...")
         try:
             image_filename = upload_image(args.server, args.image)
@@ -512,8 +658,20 @@ Notes:
             sys.exit(1)
         print()
 
-    # Build workflow
-    if is_i2v:
+    # Build workflow based on mode
+    if mode == "i2i":
+        workflow = build_i2i_workflow(
+            prompt=args.prompt,
+            negative_prompt=args.negative,
+            image_filename=image_filename,
+            width=args.width,
+            height=args.height,
+            steps=args.steps,
+            cfg=args.cfg,
+            seed=args.seed,
+            filename_prefix=args.output
+        )
+    elif mode == "i2v":
         workflow = build_i2v_workflow(
             prompt=args.prompt,
             negative_prompt=args.negative,
@@ -563,7 +721,7 @@ Notes:
         import datetime
         with open(log_file, "a") as f:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            mode_tag = "I2V" if is_i2v else "T2V"
+            mode_tag = mode.upper()
             f.write(f"{timestamp} | {mode_tag} | {prompt_id[:8]} | {args.output} | {args.prompt}\n")
     except Exception:
         pass  # Don't fail if logging fails
