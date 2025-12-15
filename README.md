@@ -6,10 +6,9 @@ Generate uncensored AI videos using WAN 2.2 Rapid AIO on a DigitalOcean GPU Drop
 
 - **Text-to-Video (T2V)** - Generate videos from text prompts using Phr00t's Rapid AIO
 - **Image-to-Video (I2V)** - Animate images with identity preservation using official WAN 2.2 I2V models
-- **Image-to-Image (I2I)** - Transform images while preserving face identity using IP-Adapter FaceID + SDXL
 - **Two-Stage Sampling** - I2V uses high-noise/low-noise model switching for better results
 - **CLI + Web UI** - Use `generate-video` command or ComfyUI interface
-- **One-shot deployment** - Single script sets up everything (~70GB of models)
+- **One-shot deployment** - Single script sets up everything (~58GB of models)
 
 ## Quick Start
 
@@ -37,9 +36,8 @@ This will:
 3. Download T2V model (~23GB) - Phr00t Rapid AIO NSFW
 4. Download I2V models (~28GB) - Official WAN 2.2 high/low noise
 5. Download text encoder & VAE (~7GB) - UMT5-XXL + WAN 2.1 VAE
-6. Download I2I models (~12GB) - RealVisXL + IP-Adapter FaceID
-7. Set up systemd service
-8. Install CLI tools
+6. Set up systemd service
+7. Install CLI tools
 
 ### Generate Videos
 
@@ -50,9 +48,6 @@ This will:
 
 # Image-to-Video
 ./generate-video -p "animate this person dancing" --image photo.png -o output
-
-# Image-to-Image (identity-preserving transform)
-./generate-video -p "nude, realistic photo, soft lighting" --image photo.png --mode i2i -o output
 
 # Queue multiple jobs
 ./generate-video -p "prompt 1" -o v1 --queue
@@ -77,15 +72,14 @@ Load `nsfw_t2v_proper_workflow` for T2V or `nsfw_i2v_workflow` for I2V.
 
 Options:
   -p, --prompt     Text prompt (required)
-  -i, --image      Input image for I2V or I2I mode
-  -m, --mode       Mode: t2v, i2v, i2i (auto-detected if not specified)
+  -i, --image      Input image for I2V mode (optional)
   -o, --output     Output filename prefix (default: nsfw_output)
-  -n, --negative   Negative prompt (auto-set based on mode)
-  --width          Width (default: 480 video, 1024 I2I)
-  --height         Height (default: 320 video, 1024 I2I)
-  --frames         Number of frames (default: 100, video only)
-  --steps          Steps (default: 8 T2V, 20 I2V, 25 I2I)
-  --cfg            CFG scale (default: 1.0 video, 7.0 I2I)
+  -n, --negative   Negative prompt (default: quality filters)
+  --width          Video width (default: 480)
+  --height         Video height (default: 320)
+  --frames         Number of frames (default: 100 = ~6 sec)
+  --steps          Sampling steps (default: 8 for T2V, 20 for I2V)
+  --cfg            CFG scale (default: 1.0)
   --seed           Random seed
   --queue          Submit and exit without waiting
   --timeout        Timeout in seconds (default: 900)
@@ -100,13 +94,7 @@ Options:
 # Image-to-Video (I2V)
 ./generate-video -p "make her smile and wave" --image photo.png -o animated
 
-# Image-to-Image (I2I) - Transform while preserving identity
-./generate-video -p "nude, realistic photo, soft lighting" --image photo.png --mode i2i -o output
-
-# I2I with custom settings
-./generate-video -p "wearing lingerie, bedroom" --image photo.png --mode i2i --cfg 8.0 -o lingerie
-
-# Higher quality video
+# Higher quality
 ./generate-video -p "A couple walking on the beach" --cfg 2.0 --steps 10
 
 # Queue multiple jobs
@@ -205,7 +193,6 @@ pn/
 ├── generate_video.py             # CLI tool source (deployed to server)
 ├── nsfw_t2v_proper_workflow.json # ComfyUI workflow for Text-to-Video
 ├── nsfw_i2v_workflow.json        # ComfyUI workflow for Image-to-Video
-├── nsfw_i2i_workflow.json        # ComfyUI workflow for Image-to-Image
 ├── .env                          # Server config (auto-generated)
 └── README.md
 ```
@@ -226,23 +213,12 @@ pn/
 - **Architecture:** Two-stage sampling (high-noise for 0-50%, low-noise for 50-100%)
 - **Sampler:** euler, beta scheduler, 20 steps (10 per stage)
 
-### Image-to-Image (I2I)
-- **Base Model:** RealVisXL V5.0 SDXL (~7GB)
-- **IP-Adapter:** FaceID Plus V2 for SDXL (~1.5GB)
-- **Face Encoder:** InsightFace antelopev2 (~360MB)
-- **CLIP Vision:** CLIP-ViT-H-14 (~2.4GB)
-- **Architecture:** Face embedding extraction → IP-Adapter conditioning → SDXL generation
-- **Sampler:** euler_ancestral, normal scheduler, 25 steps
-
 ### Output
-- **Video (T2V/I2V):** H.264 MP4 @ 16fps
-- **Image (I2I):** PNG
+- **Format:** H.264 MP4 @ 16fps
 
 ## Resources
 
 - [Phr00t Rapid AIO Model](https://huggingface.co/Phr00t/WAN2.2-14B-Rapid-AllInOne) - T2V model
 - [Official WAN 2.2 I2V Models](https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_repackaged) - I2V models
-- [RealVisXL V5.0](https://huggingface.co/SG161222/RealVisXL_V5.0) - I2I base model
-- [IP-Adapter FaceID](https://huggingface.co/h94/IP-Adapter-FaceID) - Identity preservation
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - [DigitalOcean GPU Droplets](https://www.digitalocean.com/products/gpu-droplets)
